@@ -99,7 +99,7 @@ export default function App() {
               <>
                 <div className="filter-workspace">
                   <div className="filter-section">
-                    <label>Professional Service</label>
+                  
                     <div className="pill-group">
                       {skills.map(s => (
                         <button 
@@ -113,7 +113,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="filter-section">
-                    <label>Service Location</label>
+        
                     <div className="pill-group">
                       {locations.map(l => (
                         <button 

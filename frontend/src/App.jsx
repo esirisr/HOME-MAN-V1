@@ -1,170 +1,130 @@
-import { useState, useEffect, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import StudentList from './components/StudentList';
-import AddStudentForm from './components/AddStudentForm';
-import About from './components/About';
-import Contacts from './components/Contacts';
-import LoginPortal from './components/LoginPortal';
-import { fetchStudents } from './services/fun';
-import './app.css';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Admin from './pages/Admin';
+import ProDashboard from './pages/ProDashboard';
+import ClientHome from './pages/ClientHome';
 
-export default function App() {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [editingStudent, setEditingStudent] = useState(null);
+// Scroll to top on every route change
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => { 
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+  }, [pathname]);
+  return null;
+};
+
+// --- Updated ProtectedRoute ---
+// No Alerts: Redirects automatically if unauthorized
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const token = localStorage.getItem('token');
+  const userRole = localStorage.getItem('role'); 
   
-  // --- Persistence & Auth State ---
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  if (!token) {
+    // If not logged in, send to login. 
+    // The Login page will show its own inline error if they got here by mistake.
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    // If the role doesn't match, send them to their specific dashboard
+    // This prevents "Access Denied" alerts.
+    if (userRole === 'pro') return <Navigate to="/pro-dashboard" replace />;
+    if (userRole === 'admin') return <Navigate to="/admin" replace />;
+    return <Navigate to="/client-home" replace />;
+  }
+  
+  return children;
+};
 
-  const [activeSkill, setActiveSkill] = useState('All');
-  const [activeLocation, setActiveLocation] = useState('All');
+// --- Smart Home Component ---
+const SmartHome = () => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
 
-  // Check login status on page load
-  useEffect(() => {
-    const logged = localStorage.getItem('isLogged');
-    if (logged === 'true') {
-      setIsAuthenticated(true);
-    }
-    loadStudents();
-  }, []);
+  if (!token) return <Home />; 
+  
+  if (role === 'admin') return <Navigate to="/admin" replace />;
+  if (role === 'pro') return <Navigate to="/pro-dashboard" replace />;
+  return <Navigate to="/client-home" replace />;
+};
 
-  // Use this when LoginPortal verifies "admin" and "12345"
-  const handleLogin = () => {
-    localStorage.setItem('isLogged', 'true');
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('isLogged');
-    setIsAuthenticated(false);
-  };
-
-  const skills = ['All', 'Plumber', 'Electrician', 'Carpenter', 'Painter'];
-
-  const locations = useMemo(() => {
-    const unique = [...new Set(students?.map(s => s.location) || [])];
-    return ['All', ...unique];
-  }, [students]);
-
-  const loadStudents = async () => {
-    setLoading(true);
-    try {
-      const res = await fetchStudents();
-      setStudents(res?.data || []);
-    } catch (err) {
-      console.error('Data loading failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredProviders = useMemo(() => {
-    return students.filter(s => {
-      const matchSkill = activeSkill === 'All' || s.skill === activeSkill;
-      const matchLocation = activeLocation === 'All' || s.location === activeLocation;
-      return matchSkill && matchLocation;
-    });
-  }, [activeSkill, activeLocation, students]);
-
+function App() {
   return (
-    <Router>
-      <div className="app-container">
-        <header className="glass-nav">
-          <div className="nav-content">
-            <h1 className="brand-logo">Expert<span>at</span> Hub</h1>
-            <nav className="main-nav">
-              <Link to="/" className="nav-btn">Find Experts</Link>
-              <Link to="/about" className="nav-btn">About</Link>
-              <Link to="/contacts" className="nav-btn">Contacts</Link>
-              
-              {isAuthenticated ? (
-                <button 
-                  onClick={handleLogout} 
-                  className="nav-btn admin-glow" 
-                  style={{border:'none', cursor:'pointer'}}
-                >
-                  Logout
-                </button>
-              ) : (
-                <Link to="/admin" className="nav-btn admin-glow">Admin Panel</Link>
-              )}
-            </nav>
-          </div>
-        </header>
-
-        <main className="content-area">
+    <BrowserRouter>
+      <ScrollToTop /> 
+      <div style={styles.appWrapper}>
+        <Navbar />
+        <main style={styles.mainContent}>
           <Routes>
-            {/* User View: Experts List & Filters */}
-            <Route path="/" element={
-              <>
-                <div className="filter-workspace">
-                  <div className="filter-section">
-                  
-                    <div className="pill-group">
-                      {skills.map(s => (
-                        <button 
-                          key={s} 
-                          className={activeSkill === s ? 'pill active' : 'pill'} 
-                          onClick={() => setActiveSkill(s)}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="filter-section">
-        
-                    <div className="pill-group">
-                      {locations.map(l => (
-                        <button 
-                          key={l} 
-                          className={activeLocation === l ? 'pill active-loc' : 'pill'} 
-                          onClick={() => setActiveLocation(l)}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <StudentList students={filteredProviders} loading={loading} isAdmin={false} />
-              </>
-            } />
-
-            <Route path="/about" element={<About />} />
-            <Route path="/contacts" element={<Contacts />} />
-
-            {/* Admin Route: Protected by LoginPortal */}
+            <Route path="/" element={<SmartHome />} />
+            
+            {/* Auth Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            {/* Admin Management */}
             <Route path="/admin" element={
-              isAuthenticated ? (
-                <div className="admin-layout animate-fade-in">
-                  <AddStudentForm 
-                    editingStudent={editingStudent} 
-                    setEditingStudent={setEditingStudent} 
-                    onSuccess={loadStudents} 
-                  />
-                  <div className="admin-divider" style={{margin:'40px 0', textAlign:'center', color:'var(--gray)'}}>
-                    <span>Management Database</span>
-                  </div>
-                  <StudentList 
-                    students={students} 
-                    loading={loading} 
-                    onRefresh={loadStudents} 
-                    onEdit={setEditingStudent} 
-                    isAdmin={true} 
-                  />
-                </div>
-              ) : (
-                <LoginPortal onLogin={handleLogin} />
-              )
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Admin />
+              </ProtectedRoute>
             } />
+
+            {/* Professional Dashboard */}
+            <Route path="/pro-dashboard" element={
+              <ProtectedRoute allowedRoles={['pro']}>
+                <ProDashboard />
+              </ProtectedRoute>
+            } />
+
+            {/* Client Marketplace */}
+            <Route path="/client-home" element={
+              <ProtectedRoute allowedRoles={['client', 'admin']}>
+                <ClientHome />
+              </ProtectedRoute>
+            } />
+            
+            {/* Fallback */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
-
-        <footer className="luxury-footer">
-          <p>© 2026 Home Maintenance System | Agent 377 266</p>
+        
+        <footer style={styles.footer}>
+          <p>© 2026 HOME-MAN Platform. All rights reserved.</p>
         </footer>
       </div>
-    </Router>
+    </BrowserRouter>
   );
 }
+
+const styles = {
+  appWrapper: { 
+    minHeight: '100vh', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    backgroundColor: '#f8fafc', 
+    fontFamily: "'Inter', sans-serif",
+    overflowX: 'hidden' 
+  },
+  mainContent: { 
+    flex: 1, 
+    width: '100%', 
+    maxWidth: '1400px', 
+    margin: '0 auto', 
+    padding: '20px', 
+    boxSizing: 'border-box' 
+  },
+  footer: { 
+    padding: '40px 20px', 
+    textAlign: 'center', 
+    color: '#94a3b8', 
+    fontSize: '0.85rem', 
+    borderTop: '1px solid #e2e8f0', 
+    backgroundColor: '#ffffff' 
+  }
+};
+
+export default App;
